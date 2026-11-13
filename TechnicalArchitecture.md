@@ -28,7 +28,7 @@ The workshop covered several model-serving technologies:
 
 - LM Studio
 - vLLM
-- Quen
+- Qwen
 - Jupyter Lab
 - Streamlit
 
