@@ -26,14 +26,13 @@ The GB10 workstation supports local execution of large language models.
 
 The workshop covered several model-serving technologies:
 
-- Ollama
 - LM Studio
 - vLLM
-- Hermes / Hermes Desktop
+- Quen
+- Jupyter Lab
+- Streamlit
 
 These tools provide different approaches to running and interacting with local AI models.
-
-**Project implementation:** The specific model, model server, and configuration used by the team will be documented as implementation progresses.
 
 ## 4. Large Language Model Fundamentals
 
@@ -71,15 +70,11 @@ Planned development stages:
 
 ## 7. System Architecture
 
-The proposed high-level workflow:
-
 Public San Antonio Data → Data Collection → Data Processing → LLM Integration → AI-Generated Insights → Community Impact Application
-
-The final architecture will be updated to reflect the actual implementation.
 
 ## 8. Security and Governance Considerations
 
-The project will consider:
+The project considers:
 
 - Secure remote server access.
 - API credential protection.
@@ -87,9 +82,3 @@ The project will consider:
 - Responsible use of public datasets.
 - Accuracy and reliability of AI-generated responses.
 - Privacy and responsible AI governance.
-
-## 9. Development Status
-
-**Current phase:** Infrastructure setup and technical exploration.
-
-**Next phase:** Public data collection, LLM integration, and application development.
