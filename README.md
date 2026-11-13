@@ -109,7 +109,7 @@ flowchart LR
 
 - **Yaroslav Kosienkov** — System Architecture, VLM Triage Pipeline, Vulnerability Scoring Logic & Streamlit Command Center
 - **Nathaniel Venzor** — Team Coordinator, Documentation, Data Analysis, & Primary Presenter
-- ****
+- **Yomna Elgamal** — Data Analysis, Inspection Prioritization, AI Integration & Visualization: Analyzed infrastructure data, identified inspection priorities, & integrated AI-generated insights.
 
 ---
 
