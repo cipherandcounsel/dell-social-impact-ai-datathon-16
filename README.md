@@ -107,7 +107,7 @@ flowchart LR
 
 ## Team — Team Four Squared
 
-- **Yaroslav Kosenkov** — System Architecture, VLM Triage Pipeline, Vulnerability Scoring Logic & Streamlit Command Center
+- **Yaroslav Kosienkov** — System Architecture, VLM Triage Pipeline, Vulnerability Scoring Logic & Streamlit Command Center
 - **Nathaniel Venzor** — Team Coordinator, Documentation, Data Analysis, & Primary Presenter
 - ****
 
