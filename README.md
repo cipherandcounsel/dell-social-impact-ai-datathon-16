@@ -1,50 +1,56 @@
-# dell-social-impact-ai-datathon-16
-AI-powered analysis of San Antonio public data to identify and address community challenges.
+# Dell Social Impact AI Datathon: Group 16
 
-# Project Overview
+**AI-powered analysis of San Antonio public data to identify and address community challenges.**
 
-This project explores how artificial intelligence and large language models (LLMs) can analyze publicly available City of San Antonio data to identify community challenges and support data-driven solutions.
+![Status](https://img.shields.io/badge/status-in%20development-yellow)
+![Python](https://img.shields.io/badge/python-3.x-blue)
 
-Developed as part of the Dell Social Impact AI Datathon.
+---
 
-# Objectives
+## Overview
+
+This project examines how artificial intelligence and large language models (LLMs) can be applied to publicly available City of San Antonio data to uncover community needs and inform data-driven solutions. It was developed as part of the Dell Social Impact AI Datathon.
+
+## Objectives
 
 - Collect and analyze publicly available municipal datasets.
 - Integrate an LLM to retrieve and interpret relevant city data.
-- Identify community needs through data-driven research.
-- Develop an AI-powered solution with measurable social impact.
+- Identify community needs through evidence-based research.
+- Deliver an AI-powered solution with measurable social impact.
 
-# Technology Stack
+## Technology Stack
 
-- Python
-- Large Language Models (LLMs)
-- Remote AI Server
-- GitHub
-- Public Municipal Data
-- APIs and Data Processing Tools
+| Category | Tools |
+|---|---|
+| Language | Python |
+| AI / ML | Large Language Models (LLMs), remote AI server |
+| Data | City of San Antonio open data, APIs, data processing libraries |
+| Collaboration | GitHub |
 
-# Data Sources
+## Data Sources
 
-City of San Antonio public datasets.
+This project draws on publicly available datasets published by the City of San Antonio. A full catalog of datasets, including source links and documentation, will be added as research progresses.
 
-Additional sources and dataset documentation will be added as research progresses.
+## System Architecture
 
-# System Architecture
+Architecture documentation covering the data collection pipeline, LLM integration, retrieval process, and application design will be added during development.
 
-Documentation of the data collection pipeline, LLM integration, retrieval process, and application architecture will be added during development.
+## Getting Started
 
-# Project Development
+*Installation and usage instructions will be added once the initial implementation is complete.*
 
-Development documentation, code, research findings, and implementation milestones will be maintained in this repository.
+## Repository Contents
 
-# Team Contributions
+Code, research findings, technical documentation, and implementation milestones will be maintained in this repository.
 
-To be updated with team members and their respective contributions.
+## Project Status
 
-# Project Status
+**In development.**
 
-In Development
+## Team
 
-# Acknowledgments
+*Team members and their respective contributions will be listed here.*
 
-Dell Social Impact AI Datathon Group 16
+## Acknowledgments
+
+Dell Social Impact AI Datathon, Group 16
