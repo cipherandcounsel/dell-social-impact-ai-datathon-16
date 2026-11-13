@@ -4,6 +4,7 @@ import base64
 import csv
 import io
 import json
+import os
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -20,8 +21,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent if "__file__" in globals() else P
 SERVER_DATASET_DIR = Path("/tmp/datathon/UTSA-flood-images-complete/images")
 DEFAULT_IMAGES_DIR = SERVER_DATASET_DIR if SERVER_DATASET_DIR.exists() else (PROJECT_ROOT / "images")
 
-# Output reports saved directly in the Jupyter working directory
+# Output reports saved directly in the working directory
 REPORT_JSON_PATH = PROJECT_ROOT / "triage_report.json"
+REPORT_BACKUP_PATH = PROJECT_ROOT / "triage_report.backup.json"
 REPORT_CSV_PATH = PROJECT_ROOT / "triage_report.csv"
 
 # Dynamic Social Vulnerability Multipliers mapped from VLM-detected land use
@@ -138,7 +140,7 @@ def analyze_image(image_source, filename: str = "uploaded_image.jpg") -> dict:
     """Run zero-shot VLM triage on a single image regardless of filename."""
     data_url = image_to_data_url(image_source)
 
-    with OpenAI(base_url=BASE_URL, api_key=API_KEY, timeout=120, max_retries=1) as client:
+    with OpenAI(base_url=BASE_URL, api_key=API_KEY, timeout=90, max_retries=2) as client:
         response = client.chat.completions.create(
             model=MODEL,
             temperature=0,
@@ -190,7 +192,7 @@ def ask_custom_question(image_sources, question: str) -> str:
     for src in image_sources:
         content.append({"type": "image_url", "image_url": {"url": image_to_data_url(src, max_size=1024)}})
 
-    with OpenAI(base_url=BASE_URL, api_key=API_KEY, timeout=120, max_retries=1) as client:
+    with OpenAI(base_url=BASE_URL, api_key=API_KEY, timeout=90, max_retries=2) as client:
         response = client.chat.completions.create(
             model=MODEL,
             temperature=0,
@@ -215,14 +217,48 @@ def _collect_images(folder: Path) -> list[Path]:
     return sorted([p for p in folder.rglob("*") if p.is_file() and p.suffix.lower() in extensions])
 
 
-def _save_reports(results: list[dict]) -> None:
-    """Sort results by Priority Score and save JSON/CSV reports in the Jupyter directory."""
-    ranked = sorted(results, key=lambda x: x.get("priority_score", 0), reverse=True)
+def _load_existing_records() -> dict[str, dict]:
+    """Load previously saved valid records from primary JSON or backup JSON."""
+    records: dict[str, dict] = {}
+    for candidate in (REPORT_JSON_PATH, REPORT_BACKUP_PATH):
+        if not candidate.exists():
+            continue
+        try:
+            with open(candidate, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                for item in data:
+                    fname = item.get("file")
+                    if fname and item.get("status") in {"VERY DANGEROUS", "DANGEROUS", "SAFE"}:
+                        records[fname] = item
+                if records:
+                    return records
+        except Exception:
+            continue
+    return records
 
-    with open(REPORT_JSON_PATH, "w", encoding="utf-8") as f:
+
+def _save_reports(records_by_file: dict[str, dict]) -> list[dict]:
+    """Atomically save all accumulated records to JSON, backup JSON, and CSV."""
+    ranked = sorted(records_by_file.values(), key=lambda x: x.get("priority_score", 0), reverse=True)
+
+    # Atomic JSON write via temporary file + os.replace to prevent corruption on interruption
+    tmp_json = REPORT_JSON_PATH.with_suffix(".json.tmp")
+    with open(tmp_json, "w", encoding="utf-8") as f:
         json.dump(ranked, f, indent=2, ensure_ascii=False)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_json, REPORT_JSON_PATH)
 
-    with open(REPORT_CSV_PATH, "w", newline="", encoding="utf-8") as f:
+    # Keep a backup copy in case of interrupted runs
+    tmp_bak = REPORT_BACKUP_PATH.with_suffix(".bak.tmp")
+    with open(tmp_bak, "w", encoding="utf-8") as f:
+        json.dump(ranked, f, indent=2, ensure_ascii=False)
+    os.replace(tmp_bak, REPORT_BACKUP_PATH)
+
+    # Atomic CSV write
+    tmp_csv = REPORT_CSV_PATH.with_suffix(".csv.tmp")
+    with open(tmp_csv, "w", newline="", encoding="utf-8") as f:
         fieldnames = [
             "file", "district", "status", "priority_score", "confidence",
             "water_type", "pop_density", "critical_infra", "hazards",
@@ -233,6 +269,11 @@ def _save_reports(results: list[dict]) -> None:
         for r in ranked:
             row = {k: (", ".join(v) if isinstance(v, list) else v) for k, v in r.items() if k in fieldnames}
             writer.writerow(row)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_csv, REPORT_CSV_PATH)
+
+    return ranked
 
 
 def _process_single_path(img_path: Path) -> dict:
@@ -264,11 +305,12 @@ def _process_single_path(img_path: Path) -> dict:
 def process_folder(
     folder_path=DEFAULT_IMAGES_DIR,
     max_images: int | None = None,
-    max_workers: int = 8,
+    max_workers: int = 6,
     resume: bool = True,
+    checkpoint_every: int = 10,
     progress_callback=None,
 ) -> list[dict]:
-    """Batch-process images in parallel with incremental checkpointing to CSV and JSON."""
+    """Batch-process all images in parallel, merging into persistent checkpoints every N images."""
     folder = Path(folder_path)
     if not folder.exists():
         raise FileNotFoundError(f"Dataset directory not found: {folder}")
@@ -277,48 +319,54 @@ def process_folder(
     if max_images and max_images > 0:
         all_images = all_images[:max_images]
 
-    existing_map: dict[str, dict] = {}
-    if resume and REPORT_JSON_PATH.exists():
-        try:
-            with open(REPORT_JSON_PATH, "r", encoding="utf-8") as f:
-                for item in json.load(f):
-                    if item.get("status") != "ERROR" and item.get("file"):
-                        existing_map[item["file"]] = item
-        except Exception:
-            existing_map = {}
+    # Load all previously saved valid results so progress always accumulates up to 1,024
+    records_by_file = _load_existing_records() if resume else {}
+    to_process = [p for p in all_images if p.name not in records_by_file]
 
-    to_process = [p for p in all_images if p.name not in existing_map]
-    results = list(existing_map.values())
     total_target = len(all_images)
-    completed_count = len(results)
+    newly_processed = 0
 
-    if to_process:
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {executor.submit(_process_single_path, p): p for p in to_process}
-            for future in as_completed(futures):
-                img_path = futures[future]
-                res = future.result()
-                results.append(res)
-                completed_count += 1
+    try:
+        if to_process:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {executor.submit(_process_single_path, p): p for p in to_process}
+                for future in as_completed(futures):
+                    img_path = futures[future]
+                    res = future.result()
 
-                if progress_callback:
-                    progress_callback(completed_count, total_target, img_path.name)
+                    # Store valid predictions; only record ERROR if no prior valid result exists
+                    if res.get("status") != "ERROR" or img_path.name not in records_by_file:
+                        records_by_file[img_path.name] = res
 
-                # Save incremental checkpoints every 25 images
-                if completed_count % 25 == 0:
-                    _save_reports(results)
+                    newly_processed += 1
+                    current_saved = sum(1 for p in all_images if p.name in records_by_file)
 
-    _save_reports(results)
-    return sorted(results, key=lambda x: x.get("priority_score", 0), reverse=True)
+                    if progress_callback:
+                        progress_callback(current_saved, total_target, img_path.name)
+
+                    # Frequent atomic checkpointing every 10 completed images
+                    if newly_processed % checkpoint_every == 0:
+                        _save_reports(records_by_file)
+    finally:
+        # Guaranteed final flush even on KeyboardInterrupt or network timeout
+        if records_by_file:
+            _save_reports(records_by_file)
+
+    return _save_reports(records_by_file)
 
 
 if __name__ == "__main__":
     print(f"Scanning server dataset: {DEFAULT_IMAGES_DIR}")
+    existing_count = len(_load_existing_records())
+    if existing_count:
+        print(f"Resuming from existing checkpoint: {existing_count} sectors already saved.")
+
     report = process_folder(
         DEFAULT_IMAGES_DIR,
         max_images=None,  # Process all 1,024 images
-        max_workers=8,
+        max_workers=6,
         resume=True,
-        progress_callback=lambda done, total, name: print(f"[{done}/{total}] Completed: {name}"),
+        checkpoint_every=10,
+        progress_callback=lambda done, total, name: print(f"[{done}/{total}] Saved: {name}"),
     )
-    print(f"\nDone! Saved {len(report)} ranked sectors to:\n  - {REPORT_JSON_PATH}\n  - {REPORT_CSV_PATH}")
+    print(f"\nDone! Total saved in report: {len(report)} sectors -> {REPORT_JSON_PATH} & {REPORT_CSV_PATH}")
